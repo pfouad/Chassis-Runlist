@@ -151,7 +151,16 @@ def main():
 		for port in slave:
 			card = port.ISPA_PORT_OWNER_FK
 			cables = SPATIALnet.service("eam$find_slaves",port,"*","*")
-			
+			trace_Report = attributes = [""]*16
+			if sel.is_class("ISP_CHASSIS") or sel.is_class("ISP_RACK"):
+						site = sel.ISPA_BUILDING_FK
+						trace_Report[0] = str(site.NETWORK_KEY)
+						trace_Report[1] = str(site.fdm_designation)
+						trace_Report[2] = str(site.ISPA_CLLI)
+						trace_Report[3] = str(site.fdm_nh_location)
+						trace_Report[4] = "%s ; %s ; %s ; %s" % (site.fdm_address1, site.fdm_town,site.fdm_state,site.fdm_zipcode)
+						if sel.is_class("ISP_CHASSIS"):
+								trace_Report[5] = str(sel.ISPA_NAME)
 			if len(cables) > 0 :
 				try:
 					#print "Try Tracing"
@@ -162,7 +171,7 @@ def main():
 					print ""
 					print "-----------------------------------------------------------------"
 					print "Port: ", card.ISPA_NAME, port.ISPA_PORT_NAME 
-					trace_Report = attributes = [""]*16
+					
 					project = getProject(port) 
 					trace_Report[6] = "Port: " + card.ISPA_NAME + port.ISPA_PORT_NAME
 					results = trace.run()
@@ -171,15 +180,6 @@ def main():
 						if port.fdm_ringmaster_fk.fdm_ringmaster_name is not None:
 								master_circuit = checkValue(port.fdm_ringmaster_fk.fdm_ringmaster_name)
 								print master_circuit
-					if sel.is_class("ISP_CHASSIS") or sel.is_class("ISP_RACK"):
-						site = sel.ISPA_BUILDING_FK
-						trace_Report[0] = str(site.NETWORK_KEY)
-						trace_Report[1] = str(site.fdm_designation)
-						trace_Report[2] = str(site.ISPA_CLLI)
-						trace_Report[3] = str(site.fdm_nh_location)
-						trace_Report[4] = "%s ; %s ; %s ; %s" % (site.fdm_address1, site.fdm_town,site.fdm_state,site.fdm_zipcode)
-						if sel.is_class("ISP_CHASSIS"):
-								trace_Report[5] = str(sel.ISPA_NAME)
 					for result in results.getTraceResults():
 
 						entity_list = []
@@ -250,6 +250,8 @@ def main():
 										print (str(e))
 					
 									equip.append("Patch Cable: "+desc)
+						if first_port != port:
+							equip.reverse()
 						for e in equip:
 							print e 
 					
@@ -266,14 +268,15 @@ def main():
 				except Exception as e:
 					print e
 					continue
-				trace_Reports.append(trace_Report)
+				
 			else:
 				print ""
 				print "-----------------------------------------------------------------"
 				print card.ISPA_NAME, port.ISPA_PORT_NAME, ": Not Connected"
+				trace_Report[6] = "Port: " + card.ISPA_NAME + port.ISPA_PORT_NAME + ": Not Connected"
 				print "-----------------------------------------------------------------"
 				print ""
-			
+			trace_Reports.append(trace_Report)
 	except Exception as e:
 		print e
 	for report in trace_Reports:
@@ -302,14 +305,27 @@ class RunlistGenerator:
 			self.Workbook.removedefaultsheets()
 			length = len(RunlistData[0])
 			self.WorkSheet.setlocation(1,1)
+			row = 2
+			col = 1
+			self.WorkSheet.COM().Range("A1:C1").Merge()
 			self.WorkSheet.COM().Cells(1,1).value = RunlistData[0][0].AAddress + " "+  RunlistData[0][0].ACLLI + " "+ RunlistData[0][0].AName + " "+  RunlistData[0][0].ALocation
 			for i in range(0,length-1):
-				self.WorkSheet.COM().Cells(i+2, "A").value = RunlistData[0][i].AChassis
-				self.WorkSheet.COM().Cells(i+2,"B").value = str(RunlistData[0][i].Port)
+				self.WorkSheet.COM().Cells(row, "A").value = RunlistData[0][i].AChassis
+				self.WorkSheet.COM().Cells(row,"B").value = str(RunlistData[0][i].Port)
+				col = 2
+				row = row + 1
+				for eq in RunlistData[0][i].Equip:
+					self.WorkSheet.COM().Cells(row,col).value = eq
+					if col >=4:
+						row = row + 1
+						col =2
+					else: 
+						col = col + 1
+				row = row + 1
 				#self.Worksheet.writerow(RunlistData[0][i].Port)
 				#self.WorkSheet.movenextrow()
 					
-			
+			self.WorkSheet.COM().Columns("A:I").AutoFit()
 		except Exception as e:
 			 print e
 		self.Workbook.saveas(RunlistData[0][0].AChassis + ".xls")
