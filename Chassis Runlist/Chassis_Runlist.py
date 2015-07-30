@@ -13,14 +13,13 @@ import os
 import itertools
 import sys
 import core.jms
-import win32com.client
-from win32com.client import constants
-from core.reports.excel import ExcelApplication, constants
+#import win32com.client
+from reports.excel import ExcelApplication
 
 # Two lines below generated from the command:
 #python makepy.py -i VISLIB.DLL
-from win32com.client import gencache
-gencache.EnsureModule('{00021A98-0000-0000-C000-000000000046}', 0, 4, 11)
+#from win32com.client import gencache
+#gencache.EnsureModule('{00021A98-0000-0000-C000-000000000046}', 0, 4, 11)
 
 #===========================================================================================================================
 # Return true if the passed in entity is an ISP equipment, otherwise return false
@@ -78,6 +77,15 @@ def getChassis(ent):
 			break
 
 	return parent
+def getProject(entity):
+	if entity.is_class("ISP_PORT"):
+		parent = entity.ISPA_PORT_OWNER_FK
+		if parent.is_class("ISP_CARD"):
+			project = parent.gdm_ea_attr_29
+	elif entity.is_class("ISP_CARD"):
+		project = entity.gdm_ea_attr_29
+	return project
+
 
 def findSlave(entityList):
 	slave = []
@@ -99,18 +107,20 @@ def findSlave(entityList):
 	return slave
 
 def main():
+
+
 	port_info = ConfigurationDictionary("PORT_DICT")
 	equip_dict = ConfigurationDictionary("EQDICT")
-	trace_Reports = []
-	trace_Report = attributes = [""]*15
+	
 	trace_Reports_Desc = []
-
+	trace_Reports = []
 	trace_Reports_Desc.append("A Site")	
 	trace_Reports_Desc.append("A name")
 	trace_Reports_Desc.append("A CLLI")
 	trace_Reports_Desc.append("A location")
 	trace_Reports_Desc.append("A address")
 	trace_Reports_Desc.append("A Chassis")
+	trace_Reports_Desc.append("Ports")
 	trace_Reports_Desc.append("Equip")
 	trace_Reports_Desc.append("Project")
 	trace_Reports_Desc.append("Z Site")
@@ -122,7 +132,6 @@ def main():
 	trace_Reports_Desc.append("Date")
 	try:
 		sel = gdm.selected_entity()
-
 		child = SPATIALnet.service("eam$find_slaves",sel,"*","*")
 		leaf = []
 		slave = []
@@ -132,25 +141,17 @@ def main():
 
 		slave = list(set(slave))
 		slave.sort()
-
+		ports = []
 		#for port in slave:
 		#	card = port.ISPA_PORT_OWNER_FK
 		#	print "Port: ", card.ISPA_NAME,port.ISPA_PORT_NAME
 
 		print "Total Number of Ports: ", len(slave)
 		print ""
-		equipList = []
-		projectList = []
-		ZSite = []
-		ZName = []
-		ZCLLI = []
-		ZLocation = []
-		ZAddress = []
-		Date = []
-		CirucuitID = []
 		for port in slave:
 			card = port.ISPA_PORT_OWNER_FK
 			cables = SPATIALnet.service("eam$find_slaves",port,"*","*")
+			
 			if len(cables) > 0 :
 				try:
 					#print "Try Tracing"
@@ -161,11 +162,24 @@ def main():
 					print ""
 					print "-----------------------------------------------------------------"
 					print "Port: ", card.ISPA_NAME, port.ISPA_PORT_NAME 
+					trace_Report = attributes = [""]*16
+					project = getProject(port) 
+					trace_Report[6] = "Port: " + card.ISPA_NAME + port.ISPA_PORT_NAME
 					results = trace.run()
+					master_circuit = ""
 					if port.fdm_ringmaster_fk is not None:
 						if port.fdm_ringmaster_fk.fdm_ringmaster_name is not None:
-								trace_Report[13] = checkValue(port.fdm_ringmaster_fk.fdm_ringmaster_name)
-								print trace_Report[13]
+								master_circuit = checkValue(port.fdm_ringmaster_fk.fdm_ringmaster_name)
+								print master_circuit
+					if sel.is_class("ISP_CHASSIS") or sel.is_class("ISP_RACK"):
+						site = sel.ISPA_BUILDING_FK
+						trace_Report[0] = str(site.NETWORK_KEY)
+						trace_Report[1] = str(site.fdm_designation)
+						trace_Report[2] = str(site.ISPA_CLLI)
+						trace_Report[3] = str(site.fdm_nh_location)
+						trace_Report[4] = "%s ; %s ; %s ; %s" % (site.fdm_address1, site.fdm_town,site.fdm_state,site.fdm_zipcode)
+						if sel.is_class("ISP_CHASSIS"):
+								trace_Report[5] = str(sel.ISPA_NAME)
 					for result in results.getTraceResults():
 
 						entity_list = []
@@ -191,7 +205,6 @@ def main():
 							z_end_type = z_end_nh.fdm_site_type_code
 							z_end_location = z_end_nh.fdm_nh_location 
 
-							end_isp_design = []
 							equip = []
 							project = ""
 							correct_order = True
@@ -220,7 +233,7 @@ def main():
 											if ent2 != first_port and entity_list[i].branch_number==1: #if ent2 is not the first port and the ith element in the entity list's branch # = 1 then
 												correct_order=False #the entities are not in the correct order
 											#add all information for the isp a end
-											equip.append( "End Equipment"+": "+checkValue(ent2.ISPA_SECTION_F_CODE)  + " ; " + checkValue(chassis.ISPA_NAME)+ " ; " + checkValue(parent.ISPA_NAME)) 
+											equip.append("End Equipment"+": "+checkValue(ent2.ISPA_SECTION_F_CODE)  + " ; " + checkValue(chassis.ISPA_NAME)+ " ; " + checkValue(parent.ISPA_NAME)) 
 										except Exception as e:
 											#lov conversion not found
 											print e
@@ -239,43 +252,88 @@ def main():
 									equip.append("Patch Cable: "+desc)
 						for e in equip:
 							print e 
-						equipList.append(equip)
+					
+					trace_Report[7] = equip
+					trace_Report[8] = project
+					trace_Report[9] = z_end_nh
+					trace_Report[10] = z_end_name
+					trace_Report[11] = z_end_clli
+					trace_Report[12] = z_end_location
+					trace_Report[13] = z_end_address
+					trace_Report[14] = master_circuit
+					trace_Report[15] = str(datetime.datetime.now().date())
+					
 				except Exception as e:
 					print e
 					continue
-
+				trace_Reports.append(trace_Report)
 			else:
 				print ""
 				print "-----------------------------------------------------------------"
 				print card.ISPA_NAME, port.ISPA_PORT_NAME, ": Not Connected"
 				print "-----------------------------------------------------------------"
-				print "" 
-
+				print ""
+			
 	except Exception as e:
 		print e
+	for report in trace_Reports:
+		print report
+	return trace_Reports
 
-class RunlistGenerator():
+class RunlistGenerator:
+	def __init__(self):
+		self.exl = None
+		self.Workbook = None
+		self.WorkSheet = None
+		self.com = None
+
 	def createReport(self, RunlistData):
-		version = ExcelApplication.getExcelVersion()
-		if version is not None:
-			xl = ExcelApplication()
-			wb = xl.new_workbook()
-			sheet = wb.addsheet("Runlist")
-class RunlistData():
+		try:
+			version = ExcelApplication.getExcelVersion()
+			if version is not None:
+				self.exl = ExcelApplication()
+				self.Workbook = self.exl.new_workbook()
+				self.WorkSheet = self.Workbook.addsheet("Runlist")
+				self.WorkSheet.activate()
+		except:
+			sys.exit("Please ensure Microsft Excel is installed.")
+		try:
+			self.exl.show()
+			self.Workbook.removedefaultsheets()
+			length = len(RunlistData[0])
+			self.WorkSheet.setlocation(1,1)
+			self.WorkSheet.COM().Cells(1,1).value = RunlistData[0][0].AAddress + " "+  RunlistData[0][0].ACLLI + " "+ RunlistData[0][0].AName + " "+  RunlistData[0][0].ALocation
+			for i in range(0,length-1):
+				self.WorkSheet.COM().Cells(i+2, "A").value = RunlistData[0][i].AChassis
+				self.WorkSheet.COM().Cells(i+2,"B").value = str(RunlistData[0][i].Port)
+				#self.Worksheet.writerow(RunlistData[0][i].Port)
+				#self.WorkSheet.movenextrow()
+					
+			
+		except Exception as e:
+			 print e
+		self.Workbook.saveas(RunlistData[0][0].AChassis + ".xls")
+
+
+
+
+
+class RunlistData:
 	ASite = None
 	AName = None
 	ACLLI = None
 	ALocation = None
 	AAddress = None
 	AChassis = None
-	Equip = []
-	Project = []
-	ZSite = []
-	ZName = []
-	ZCLLI = []
-	ZLocation = []
-	ZAddress = []
-	CircuitID = []
+	Port = None
+	Equip = None
+	Project = None
+	ZSite = None
+	ZName = None
+	ZCLLI = None
+	ZLocation = None
+	ZAddress = None
+	CircuitID = None
 	Date = None
 	def parseArray(self, dataArray):
 		result = []
@@ -289,18 +347,18 @@ class RunlistData():
 			data[i].ALocation = dataArray[i][3]
 			data[i].AAddress = dataArray[i][4]
 			data[i].AChassis = dataArray[i][5]
-			data[i].Equip.append(dataArray[i][6])
-			data[i].Project.append(dataArray[i][7])
-			data[i].ZSite.append(dataArray[i][8])
-			data[i].ZName.append(dataArray[i][9])
-			data[i].ZCLLI.append(dataArray[i][10])
-			data[i].ZLocation.append(dataArray[i][11])
-			data[i].ZAddress.append(dataArray[i][12])
-			data[i].CircuitID.append(dataArray[i][13])
-			data[i].Date= dataArray[i][14]
+			data[i].Port = dataArray[i][6]
+			data[i].Equip = dataArray[i][7]
+			data[i].Project = dataArray[i][8]
+			data[i].ZSite = dataArray[i][9]
+			data[i].ZName = dataArray[i][10]
+			data[i].ZCLLI = dataArray[i][11]
+			data[i].ZLocation = dataArray[i][12]
+			data[i].ZAddress = dataArray[i][13]
+			data[i].CircuitID = dataArray[i][14]
+			data[i].Date= dataArray[i][15]
 		result.append(data)
 		return result
-
 
 if __name__ == '__main__':
 	exl = RunlistGenerator()
