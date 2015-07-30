@@ -310,15 +310,19 @@ class RunlistGenerator:
 			self.WorkSheet.COM().Range("A1:C1").Merge()
 			self.WorkSheet.COM().Cells(1,1).value = RunlistData[0][0].AAddress + " "+  RunlistData[0][0].ACLLI + " "+ RunlistData[0][0].AName + " "+  RunlistData[0][0].ALocation
 			for i in range(0,length-1):
+				col  = 1
 				self.WorkSheet.COM().Cells(row, "A").value = RunlistData[0][i].AChassis
 				self.WorkSheet.COM().Cells(row,"B").value = str(RunlistData[0][i].Port)
+				self.WorkSheet.setborder([4,8],1,3,1,row,col,row,col+1)
+				#self.WorkSheet.setborder("xlEdgeBottom","xlContinous","xlMedium","xlColorIndexAutomatic",row,col,row,col+1)
+				self.WorkSheet.setbold(1,row,col,row,col+1)
 				col = 2
 				row = row + 1
 				for eq in RunlistData[0][i].Equip:
 					self.WorkSheet.COM().Cells(row,col).value = eq
 					if col >=4:
 						row = row + 1
-						col =2
+						col =1
 					else: 
 						col = col + 1
 				row = row + 1
