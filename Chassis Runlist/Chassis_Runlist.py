@@ -61,6 +61,28 @@ def checkValue(value):
 		return ""
 	else:
 		return str(value)
+
+def getLocation(ent):
+	locCode = ent.ISPA_SECTION_F_CODE
+	locate = locCode.split(".")
+
+	for i in range(len(locate)):
+		if i == 0:
+			loc = "Floor:" + locate[i]
+		elif i == 1:
+			loc = loc + "; " + "Row: " + locate[i]
+		elif i == 2:
+			loc = loc + "; " +  locate[i]
+		elif i == 3:
+			loc = loc + "; " + "RU: " + locate[i]
+		elif i ==4:
+			loc = loc + "; " + "Slot: " + locate[i]
+		elif i > 4 and i < len(locate)-1:
+			loc = loc + "; " + "Subslot: " + locate[i]
+		elif i == len(locate)-1 and i > 4:
+			loc = loc + "; " + "Port: " + locate[i] 
+	return loc
+
 def getChassis(ent):
 
 	parent = ent
@@ -160,7 +182,7 @@ def main():
 						trace_Report[3] = str(site.fdm_nh_location)
 						trace_Report[4] = "%s ; %s ; %s ; %s" % (site.fdm_address1, site.fdm_town,site.fdm_state,site.fdm_zipcode)
 						if sel.is_class("ISP_CHASSIS"):
-								trace_Report[5] = str(sel.ISPA_NAME)
+								trace_Report[5] = getLocation(sel) + ": " + str(sel.ISPA_NAME)
 			if len(cables) > 0 :
 				try:
 					#print "Try Tracing"
@@ -221,7 +243,7 @@ def main():
 									if parent.fdm_interface_fk is not None: #if the parent has an osp interface then
 										#found patch panel
 										  #get the chassis of ent2
-										pnl = checkValue(chassis.ISPA_NAME) + " ; "+checkValue(chassis.ISPA_SECTION_F_CODE) + " ; " + checkValue(ent2.ISPA_PORT_NAME) 
+										pnl = checkValue(chassis.ISPA_NAME) + " ; "+checkValue(getLocation(chassis)) + " ; " + checkValue(ent2.ISPA_PORT_NAME) 
 										equip.append("Patch Panel"+": "+pnl) #get the name of the panel and all information
 									else:     #if the parent has no osp interface
 											#Dictionary look up for isp equipment
@@ -233,7 +255,7 @@ def main():
 											if ent2 != first_port and entity_list[i].branch_number==1: #if ent2 is not the first port and the ith element in the entity list's branch # = 1 then
 												correct_order=False #the entities are not in the correct order
 											#add all information for the isp a end
-											equip.append("End Equipment"+": "+checkValue(ent2.ISPA_SECTION_F_CODE)  + " ; " + checkValue(chassis.ISPA_NAME)+ " ; " + checkValue(parent.ISPA_NAME)) 
+											equip.append("End Equipment"+": "+checkValue(getLocation(ent2))  + " ; " + checkValue(chassis.ISPA_NAME)+ " ; " + checkValue(parent.ISPA_NAME)) 
 										except Exception as e:
 											#lov conversion not found
 											print e
@@ -305,34 +327,54 @@ class RunlistGenerator:
 			self.Workbook.removedefaultsheets()
 			length = len(RunlistData[0])
 			self.WorkSheet.setlocation(1,1)
-			row = 2
+			row = 1
 			col = 1
 			self.WorkSheet.COM().Range("A1:C1").Merge()
-			self.WorkSheet.COM().Cells(1,1).value = RunlistData[0][0].AAddress + " "+  RunlistData[0][0].ACLLI + " "+ RunlistData[0][0].AName + " "+  RunlistData[0][0].ALocation
+			self.WorkSheet.COM().Cells(1,1).value = RunlistData[0][0].AAddress + " "+  RunlistData[0][0].ACLLI + " "+ RunlistData[0][0].AName + " "+  RunlistData[0][0].ALocation + " " + RunlistData[0][0].AChassis.replace("; ", " ")
 			for i in range(0,length-1):
+				row = row + 1
 				col  = 1
-				self.WorkSheet.COM().Cells(row, "A").value = RunlistData[0][i].AChassis
-				self.WorkSheet.COM().Cells(row,"B").value = str(RunlistData[0][i].Port)
-				self.WorkSheet.setborder([4,8],1,3,1,row,col,row,col+1)
+				if RunlistData[0][i].CircuitID != "":
+					self.WorkSheet.COM().Cells(row,"A").value = RunlistData[0][i].Port + " " + RunlistData[0][i].CircuitID
+				else:
+					self.WorkSheet.COM().Cells(row,"A").value = RunlistData[0][i].Port
+				self.WorkSheet.setborder([4,8],1,3,1,row,col,row,col)
 				#self.WorkSheet.setborder("xlEdgeBottom","xlContinous","xlMedium","xlColorIndexAutomatic",row,col,row,col+1)
-				self.WorkSheet.setbold(1,row,col,row,col+1)
-				col = 2
-				row = row + 1
+				self.WorkSheet.setbold(1,row,col,row,col)
+				col = 4
 				for eq in RunlistData[0][i].Equip:
-					self.WorkSheet.COM().Cells(row,col).value = eq
-					if col >=4:
+					equip = []
+					types = []
+					types = eq.split(": ")
+					type = types[0]
+					equipment = eq.split("; ")
+					temp = []
+					temp = equipment[0].split(": ")
+					equipment[0] = temp[1]
+					
+					if type == "Patch Cable":
+						col2 = 2
+						equipment[0] = temp[1] + ": " + temp [2]
+						for equip in equipment:
+							self.WorkSheet.COM().Cells(row,col2).value = equip
+							col2 = col2 + 1
+					else:
+						for equip in equipment:
+							self.WorkSheet.COM().Cells(row,col).value = equip
+							col = col + 1
+					
+					if col > 23:
 						row = row + 1
-						col =1
-					else: 
-						col = col + 1
-				row = row + 1
+						col = 4
 				#self.Worksheet.writerow(RunlistData[0][i].Port)
 				#self.WorkSheet.movenextrow()
 					
-			self.WorkSheet.COM().Columns("A:I").AutoFit()
+			self.WorkSheet.COM().Columns("A:Z").AutoFit()
 		except Exception as e:
 			 print e
-		self.Workbook.saveas(RunlistData[0][0].AChassis + ".xls")
+		filename = RunlistData[0][0].AChassis.split(": ")
+		leng = len(filename) - 1
+		self.Workbook.saveas(filename[leng] + ".xls")
 
 
 
