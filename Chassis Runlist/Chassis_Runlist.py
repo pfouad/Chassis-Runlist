@@ -77,10 +77,14 @@ def getLocation(ent):
 			loc = loc + "; " + "RU: " + locate[i]
 		elif i ==4:
 			loc = loc + "; " + "Slot: " + locate[i]
-		elif i > 4 and i < len(locate)-1:
-			loc = loc + "; " + "Subslot: " + locate[i]
+		elif i > 4 and i < len(locate)-2:
+			loc = loc + "/" + locate[i]
+		elif i == len(locate)-2 and i > 4:
+			loc = loc + "; " + "Port: " + locate[i]
+		elif i == len(locate)-1 and len(locate)-2 == 4:
+			loc = loc + "; " + "Port: " + locate[i]
 		elif i == len(locate)-1 and i > 4:
-			loc = loc + "; " + "Port: " + locate[i] 
+			loc = loc + " " + locate[i]  
 	return loc
 
 def getChassis(ent):
@@ -104,8 +108,12 @@ def getProject(entity):
 		parent = entity.ISPA_PORT_OWNER_FK
 		if parent.is_class("ISP_CARD"):
 			project = parent.gdm_ea_attr_29
+		else:
+			project = ""
 	elif entity.is_class("ISP_CARD"):
 		project = entity.gdm_ea_attr_29
+	else:
+		project = ""
 	return project
 
 
@@ -157,6 +165,7 @@ def main():
 		child = SPATIALnet.service("eam$find_slaves",sel,"*","*")
 		leaf = []
 		slave = []
+		project = ""
 		for elem in child:
 			leaf.append(elem[0])
 		slave=findSlave(leaf)
@@ -164,9 +173,9 @@ def main():
 		slave = list(set(slave))
 		slave.sort()
 		ports = []
-		#for port in slave:
-		#	card = port.ISPA_PORT_OWNER_FK
-		#	print "Port: ", card.ISPA_NAME,port.ISPA_PORT_NAME
+		for port in slave:
+			card = port.ISPA_PORT_OWNER_FK
+			print "Port: ", card.ISPA_NAME,port.ISPA_PORT_NAME
 
 		print "Total Number of Ports: ", len(slave)
 		print ""
@@ -185,17 +194,20 @@ def main():
 								trace_Report[5] = getLocation(sel) + ": " + str(sel.ISPA_NAME)
 			if len(cables) > 0 :
 				try:
-					#print "Try Tracing"
-					#print cables[0]
+					print "Try Tracing"
+					print cables[0]
 					start = [core.tdm.trace.TraceStartPoint(cables[0][0],1)]
-					#print start[0]
+					print start[0]
 					trace = core.tdm.trace.Trace(start)
 					print ""
 					print "-----------------------------------------------------------------"
-					print "Port: ", card.ISPA_NAME, port.ISPA_PORT_NAME 
+					print "Port: ", card.ISPA_NAME," ", port.ISPA_PORT_NAME 
 					
-					project = getProject(port) 
-					trace_Report[6] = "Port: " + card.ISPA_NAME + port.ISPA_PORT_NAME
+					project = getProject(port)
+					if card.ISPA_NAME is not None: 
+						trace_Report[6] = "Port: " + card.ISPA_NAME + port.ISPA_PORT_NAME
+					else:
+						trace_Report[6] = "Port: " +  port.ISPA_PORT_NAME
 					results = trace.run()
 					master_circuit = ""
 					if port.fdm_ringmaster_fk is not None:
@@ -243,8 +255,8 @@ def main():
 									if parent.fdm_interface_fk is not None: #if the parent has an osp interface then
 										#found patch panel
 										  #get the chassis of ent2
-										pnl = checkValue(chassis.ISPA_NAME) + " ; "+checkValue(getLocation(chassis)) + " ; " + checkValue(ent2.ISPA_PORT_NAME) 
-										equip.append("Patch Panel"+": "+pnl) #get the name of the panel and all information
+										pnl =  checkValue(getLocation(chassis))+ " ; " +checkValue(chassis.ISPA_NAME)+ " ; " + checkValue(ent2.ISPA_PORT_NAME) 
+										equip.append("Patch Panel: "+pnl) #get the name of the panel and all information
 									else:     #if the parent has no osp interface
 											#Dictionary look up for isp equipment
 										try:
@@ -295,7 +307,10 @@ def main():
 				print ""
 				print "-----------------------------------------------------------------"
 				print card.ISPA_NAME, port.ISPA_PORT_NAME, ": Not Connected"
-				trace_Report[6] = "Port: " + card.ISPA_NAME + port.ISPA_PORT_NAME + ": Not Connected"
+				if card.ISPA_NAME is not None:
+					trace_Report[6] = "Port: " + card.ISPA_NAME + port.ISPA_PORT_NAME + ": Not Connected"
+				else:
+					trace_Report[6] = "Port: " + port.ISPA_PORT_NAME + ": Not Connected"
 				print "-----------------------------------------------------------------"
 				print ""
 			trace_Reports.append(trace_Report)
@@ -327,22 +342,54 @@ class RunlistGenerator:
 			self.Workbook.removedefaultsheets()
 			length = len(RunlistData[0])
 			self.WorkSheet.setlocation(1,1)
-			row = 1
+			row = 2
 			col = 1
-			self.WorkSheet.COM().Range("A1:C1").Merge()
+			startrow = 0
+			endrow = 0 
+			portnum = 0
+			self.WorkSheet.COM().Range("A1:J1").Merge()
 			self.WorkSheet.COM().Cells(1,1).value = RunlistData[0][0].AAddress + " "+  RunlistData[0][0].ACLLI + " "+ RunlistData[0][0].AName + " "+  RunlistData[0][0].ALocation + " " + RunlistData[0][0].AChassis.replace("; ", " ")
+			self.WorkSheet.COM().Cells(2,1).value = "Port"
+			self.WorkSheet.COM().Cells(2,2).value = "Far Side Address"
+			self.WorkSheet.COM().Cells(2,3).value = "Circuit ID"
+			self.WorkSheet.COM().Cells(2,4).value = "Project"
+			self.WorkSheet.COM().Cells(2,5).value = "Patch Cord Length"
+			self.WorkSheet.COM().Cells(2,6).value = "Patch Cord Type"
+			self.WorkSheet.COM().Cells(2,7).value = "A Side Floor"
+			self.WorkSheet.COM().Cells(2,8).value = "A Side Row"
+			self.WorkSheet.COM().Cells(2,9).value = "A Side Rack"
+			self.WorkSheet.COM().Cells(2,10).value = "A Side RU"
+			self.WorkSheet.COM().Cells(2,11).value = "A Side Slot"
+			self.WorkSheet.COM().Cells(2,12).value = "A Side Port"
+			self.WorkSheet.COM().Cells(2,13).value = "A Side Chassis"
+			self.WorkSheet.COM().Cells(2,14).value = "A Side Full Name"
+			self.WorkSheet.COM().Cells(2,15).value = "Z Side Floor"
+			self.WorkSheet.COM().Cells(2,16).value = "Z Side Row"
+			self.WorkSheet.COM().Cells(2,17).value = "Z Side Rack"
+			self.WorkSheet.COM().Cells(2,18).value = "Z Side RU"
+			self.WorkSheet.COM().Cells(2,19).value = "Z Side Slot"
+			self.WorkSheet.COM().Cells(2,20).value = "Z Side Port"
+			self.WorkSheet.COM().Cells(2,21).value = "Z Side Chassis"
+			self.WorkSheet.COM().Cells(2,22).value = "Z Side Full Name"
+			self.WorkSheet.setbold(1,1,1,2,24)
 			for i in range(0,length-1):
+				portnum = portnum + 1
 				row = row + 1
+				startrow = row
 				col  = 1
+				self.WorkSheet.COM().Cells(row,"A").value = RunlistData[0][i].Port
+				if RunlistData[0][i].ZAddress != RunlistData[0][i].AAddress:
+					self.WorkSheet.COM().Cells(row,"B").value = RunlistData[0][i].ZName+ " "+ RunlistData[0][i].ZAddress 
 				if RunlistData[0][i].CircuitID != "":
-					self.WorkSheet.COM().Cells(row,"A").value = RunlistData[0][i].Port + " " + RunlistData[0][i].CircuitID
-				else:
-					self.WorkSheet.COM().Cells(row,"A").value = RunlistData[0][i].Port
+					self.WorkSheet.COM().Cells(row,"C").value = RunlistData[0][i].CircuitID
+				if RunlistData[0][i].Project != "":
+					self.WorkSheet.COM().Cells(row,"D").value = RunlistData[0][i].Project
 				self.WorkSheet.setborder([4,8],1,3,1,row,col,row,col)
-				#self.WorkSheet.setborder("xlEdgeBottom","xlContinous","xlMedium","xlColorIndexAutomatic",row,col,row,col+1)
 				self.WorkSheet.setbold(1,row,col,row,col)
-				col = 4
+				col = 7
+				equipnum = 0
 				for eq in RunlistData[0][i].Equip:
+					equipnum = equipnum + 1
 					equip = []
 					types = []
 					types = eq.split(": ")
@@ -353,7 +400,7 @@ class RunlistGenerator:
 					equipment[0] = temp[1]
 					
 					if type == "Patch Cable":
-						col2 = 2
+						col2 = 5
 						equipment[0] = temp[1] + ": " + temp [2]
 						for equip in equipment:
 							self.WorkSheet.COM().Cells(row,col2).value = equip
@@ -363,18 +410,22 @@ class RunlistGenerator:
 							self.WorkSheet.COM().Cells(row,col).value = equip
 							col = col + 1
 					
-					if col > 23:
+					if equipnum == 3:
 						row = row + 1
-						col = 4
-				#self.Worksheet.writerow(RunlistData[0][i].Port)
-				#self.WorkSheet.movenextrow()
-					
+						col = 7
+						equipnum = 0
+					elif equipnum == 2:
+						col = 15
+				endrow = row
+				if portnum%2 == 0:
+					self.WorkSheet.setcolorindex(15, startrow,1,endrow,99)
 			self.WorkSheet.COM().Columns("A:Z").AutoFit()
 		except Exception as e:
 			 print e
-		filename = RunlistData[0][0].AChassis.split(": ")
+		filename = RunlistData[0][0].AChassis
+		filename = filename.split(": ")
 		leng = len(filename) - 1
-		self.Workbook.saveas(filename[leng] + ".xls")
+		self.Workbook.saveas("C:\\D-Drive\\" + filename[leng] + ".xls")
 
 
 
