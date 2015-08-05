@@ -377,8 +377,9 @@ class RunlistGenerator:
 				row = row + 1
 				startrow = row
 				col  = 1
+				nonetype =  "%s ; %s ; %s ; %s" %(None,None,None,None)
 				self.WorkSheet.COM().Cells(row,"A").value = RunlistData[0][i].Port
-				if RunlistData[0][i].ZAddress != RunlistData[0][i].AAddress:
+				if RunlistData[0][i].ZAddress != RunlistData[0][i].AAddress and RunlistData[0][i].ZAddress != nonetype:
 					self.WorkSheet.COM().Cells(row,"B").value = RunlistData[0][i].ZName+ " "+ RunlistData[0][i].ZAddress 
 				if RunlistData[0][i].CircuitID != "":
 					self.WorkSheet.COM().Cells(row,"C").value = RunlistData[0][i].CircuitID
@@ -389,6 +390,13 @@ class RunlistGenerator:
 				col = 7
 				equipnum = 0
 				for eq in RunlistData[0][i].Equip:
+					
+					if equipnum == 3:
+						row = row + 1
+						col = 7
+						equipnum = 0
+					elif equipnum == 2:
+						col = 15
 					equipnum = equipnum + 1
 					equip = []
 					types = []
@@ -409,17 +417,16 @@ class RunlistGenerator:
 						for equip in equipment:
 							self.WorkSheet.COM().Cells(row,col).value = equip
 							col = col + 1
+						
 					
-					if equipnum == 3:
-						row = row + 1
-						col = 7
-						equipnum = 0
-					elif equipnum == 2:
-						col = 15
+					
 				endrow = row
 				if portnum%2 == 0:
 					self.WorkSheet.setcolorindex(15, startrow,1,endrow,99)
 			self.WorkSheet.COM().Columns("A:Z").AutoFit()
+			self.WorkSheet.activate()
+			self.exl.COM().Range("B3").Select()
+			self.exl.COM().ActiveWindow.FreezePanes = True
 		except Exception as e:
 			 print e
 		filename = RunlistData[0][0].AChassis
