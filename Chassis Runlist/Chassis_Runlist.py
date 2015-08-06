@@ -12,6 +12,7 @@ import datetime
 import os
 import itertools
 import sys
+import re
 import core.jms
 #import win32com.client
 from reports.excel import ExcelApplication
@@ -63,7 +64,7 @@ def checkValue(value):
 		return str(value)
 
 def getLocation(ent):
-	locCode = ent.ISPA_SECTION_F_CODE
+	locCode = str(ent.ISPA_SECTION_F_CODE)
 	locate = locCode.split(".")
 
 	for i in range(len(locate)):
@@ -71,8 +72,11 @@ def getLocation(ent):
 			loc = "Floor:" + locate[i]
 		elif i == 1:
 			loc = loc + "; " + "Row: " + locate[i]
-		elif i == 2:
-			loc = loc + "; " +  locate[i]
+		elif i == 2:			
+			if not (re.search("rack", locate[i].lower())):
+				loc = loc + "; " + "Rack: " +locate[i]
+			else:
+				loc = loc + "; " +locate[i]
 		elif i == 3:
 			loc = loc + "; " + "RU: " + locate[i]
 		elif i ==4:
@@ -107,11 +111,11 @@ def getProject(entity):
 	if entity.is_class("ISP_PORT"):
 		parent = entity.ISPA_PORT_OWNER_FK
 		if parent.is_class("ISP_CARD"):
-			project = parent.gdm_ea_attr_29
+			project =checkValue(parent.gdm_ea_attr_29)
 		else:
 			project = ""
 	elif entity.is_class("ISP_CARD"):
-		project = entity.gdm_ea_attr_29
+		project = checkValue(entity.gdm_ea_attr_29)
 	else:
 		project = ""
 	return project
@@ -183,6 +187,11 @@ def main():
 			card = port.ISPA_PORT_OWNER_FK
 			cables = SPATIALnet.service("eam$find_slaves",port,"*","*")
 			trace_Report = attributes = [""]*16
+			project = getProject(port)
+
+			trace_Report[8] = project
+
+			print "Project: ", project
 			if sel.is_class("ISP_CHASSIS") or sel.is_class("ISP_RACK"):
 						site = sel.ISPA_BUILDING_FK
 						trace_Report[0] = str(site.NETWORK_KEY)
@@ -203,9 +212,9 @@ def main():
 					print "-----------------------------------------------------------------"
 					print "Port: ", card.ISPA_NAME," ", port.ISPA_PORT_NAME 
 					
-					project = getProject(port)
+					
 					if card.ISPA_NAME is not None: 
-						trace_Report[6] = "Port: " + card.ISPA_NAME + port.ISPA_PORT_NAME
+						trace_Report[6] = "Port: " + card.ISPA_NAME + " "+port.ISPA_PORT_NAME
 					else:
 						trace_Report[6] = "Port: " +  port.ISPA_PORT_NAME
 					results = trace.run()
@@ -255,7 +264,7 @@ def main():
 									if parent.fdm_interface_fk is not None: #if the parent has an osp interface then
 										#found patch panel
 										  #get the chassis of ent2
-										pnl =  checkValue(getLocation(chassis))+ " ; " +checkValue(chassis.ISPA_NAME)+ " ; " + checkValue(ent2.ISPA_PORT_NAME) 
+										pnl =  checkValue(getLocation(ent2))+ " ; " +checkValue(chassis.ISPA_NAME)+ " ; " + checkValue(parent.ISPA_NAME) 
 										equip.append("Patch Panel: "+pnl) #get the name of the panel and all information
 									else:     #if the parent has no osp interface
 											#Dictionary look up for isp equipment
@@ -290,7 +299,6 @@ def main():
 							print e 
 					
 					trace_Report[7] = equip
-					trace_Report[8] = project
 					trace_Report[9] = z_end_nh
 					trace_Report[10] = z_end_name
 					trace_Report[11] = z_end_clli
@@ -308,7 +316,7 @@ def main():
 				print "-----------------------------------------------------------------"
 				print card.ISPA_NAME, port.ISPA_PORT_NAME, ": Not Connected"
 				if card.ISPA_NAME is not None:
-					trace_Report[6] = "Port: " + card.ISPA_NAME + port.ISPA_PORT_NAME + ": Not Connected"
+					trace_Report[6] = "Port: " + card.ISPA_NAME +  " " +port.ISPA_PORT_NAME + ": Not Connected"
 				else:
 					trace_Report[6] = "Port: " + port.ISPA_PORT_NAME + ": Not Connected"
 				print "-----------------------------------------------------------------"
@@ -424,6 +432,7 @@ class RunlistGenerator:
 				if portnum%2 == 0:
 					self.WorkSheet.setcolorindex(15, startrow,1,endrow,99)
 			self.WorkSheet.COM().Columns("A:Z").AutoFit()
+			self.WorkSheet.sethorizontalalignment(2, 1,1, 1000,26)
 			self.WorkSheet.activate()
 			self.exl.COM().Range("B3").Select()
 			self.exl.COM().ActiveWindow.FreezePanes = True
